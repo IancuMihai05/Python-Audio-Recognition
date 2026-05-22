@@ -4,9 +4,7 @@ import os
 import asyncio
 from shazamio import Shazam
 
-    # Function to capture audio from the microphone and save it as output.wav
-
-
+# Functia pentru a captura sunet de la microfon si a-l salva ca output.wav
 def record_microphone(duration=5):
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
@@ -17,55 +15,55 @@ def record_microphone(duration=5):
     with wave.open('output.wav', 'wb') as wf:
         p = pyaudio.PyAudio()
         wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setsampwidth(p.get_sample_size(FORMAT))git status
         wf.setframerate(RATE)
 
         stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True)
 
-        print('Recording...')
+        print('Se inregistreaza...')
         for _ in range(0, RATE // CHUNK * RECORD_SECONDS):
             wf.writeframes(stream.read(CHUNK))
             print(".", end='', flush=True)
-        print('\nDone')
+        print('\nGata')
 
         stream.close()
         p.terminate()
 
 
-# Function to scan the folder and create a dictionary of song fingerprints
+# Functia pentru a scana folderul si a crea un dictionar cu amprentele melodiilor
 async def generate_fingerprints(folder_path=r"D:\Music"):
     results = {}
     shazam = Shazam()
 
     for element in os.listdir(folder_path):
-        # Only process MP3 files
+        # Proceseaza doar fisierele MP3
         if element.endswith('.mp3'):
             file_path = os.path.join(folder_path, element)
-            print(f"File: {element}")
+            print(f"Fisier: {element}")
 
-            # Get song info from Shazam API
+            # Obtine informatii despre melodie de la Shazam API
             response = await shazam.recognize(file_path)
 
             if 'track' in response:
                 title = response['track']['title']
                 artist = response['track']['subtitle']
                 results[element] = f'{artist} - {title}'
-                print(f" Found: {artist} - {title}\n")
+                print(f" Gasit: {artist} - {title}\n")
             else:
-                print(f" Could not generate fingerprint\n")
+                print(f" Nu s-a putut genera amprenta\n")
 
-    # Display the final local song database
-    print("Song database:")
+    # Afiseaza baza de date finala cu melodiile locale
+    print("Baza de date cu melodii:")
     for file, song in results.items():
         print(f"  {file} -> {song}")
     return results
 
 
-# Function to identify the recorded file and compare it with the database
+# Functia pentru a identifica fisierul inregistrat si a-l compara cu baza de date
 async def identify_audio(database):
     shazam = Shazam()
 
-    # Recognize the audio captured from the microphone
+    # Recunoaste sunetul capturat de la microfon
     response_mic = await shazam.recognize("output.wav")
 
     if 'track' in response_mic:
@@ -73,30 +71,30 @@ async def identify_audio(database):
         artist = response_mic['track']['subtitle']
         mic_fingerprint = f'{artist} - {title}'
 
-        print(f"Microphone detection: {mic_fingerprint}")
+        print(f"Detectie microfon: {mic_fingerprint}")
 
-        # Check if the song exists in the dictionary created in Step 1
+        # Verifica daca melodia exista in dictionarul creat la Pasul 1
         if mic_fingerprint in database.values():
-            print("Song found in folder")
+            print("Melodia a fost gasita in folder")
         else:
-            print("Song recognized but not in folder")
+            print("Melodia a fost recunoscuta, dar nu este in folder")
     else:
-        print("Could not recognize song")
+        print("Melodia nu a putut fi recunoscuta")
 
 
-# Execution flow
+# Fluxul de executie
 if __name__ == "__main__":
-    print("AUDIO RECOGNITION SYSTEM")
+    print("SISTEM DE RECUNOASTERE AUDIO")
 
-    # Step 1: Scan local files and build fingerprint database
-    print("STEP 1: Scanning music folder...\n")
+    # Pasul 1: Scaneaza fisierele locale si construieste baza de date cu amprente
+    print("PASUL 1: Se scaneaza folderul de muzica...\n")
     song_database = asyncio.run(generate_fingerprints())
 
-    # Step 2: Record new audio sample from microphone
-    print("\nSTEP 2: Recording from microphone...")
-    input("Press ENTER to start recording...")
+    # Pasul 2: Inregistreaza un nou sample audio de la microfon
+    print("\nPASUL 2: Se inregistreaza de la microfon...")
+    input("Apasa ENTER pentru a incepe inregistrarea...")
     record_microphone()
 
-    # Step 3: Identify the sample and search in local database
-    print("\n\nSTEP 3: Identifying song...\n")
+    # Pasul 3: Identifica sample-ul si cauta in baza de date locala
+    print("\n\nPASUL 3: Se identifica melodia...\n")
     asyncio.run(identify_audio(song_database))
