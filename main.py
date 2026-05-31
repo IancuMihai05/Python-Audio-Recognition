@@ -1,100 +1,124 @@
+"""
+Echipa: 31-E5
+Studenti: IANCU MIHAI-ADRIAN, LĂZĂRESCU MOISE-ADRIAN
+Tema proiect: D4-T1 | Achiziție semnal audio
+"""
+
+import os
+import json
 import wave
 import pyaudio
-import os
-import asyncio
-from shazamio import Shazam
+import numpy as np
+import librosa
+from scipy.spatial.distance import cosine
 
-# Functia pentru a captura sunet de la microfon si a-l salva ca output.wav
-def record_microphone(duration=5):
+# Variabile globale
+JSON_DB_PATH = "semnaturi_audio.json"
+FOLDER_MUZICA = "D:/Muzica"
+DURATA_TEST = 15  # Secunde (sincronizat perfect pentru JSON și Microfon)
+
+def extrage_semnatura(file_path):
+    """Extrage amprenta audio (fără volum general) dintr-un fișier."""
+    # 1. Incarcam primele 15 secunde
+    audio_data, sr = librosa.load(file_path, sr=22050, duration=DURATA_TEST)
+
+    # 2. Tăiem liniștea de la început (dacă există) ca să nu ne strice media
+    audio_data, _ = librosa.effects.trim(audio_data, top_db=20)
+
+    # 3. Extragem 14 coeficienți MFCC
+    mfccs = librosa.feature.mfcc(y=audio_data, sr=sr, n_mfcc=14)
+
+    # 4. TRUCUL PRO: Aruncăm primul rând (indexul 0 reprezintă doar volumul)
+    mfccs = mfccs[1:, :]
+
+    # 5. Calculăm media și deviația standard pe cei 13 coeficienți rămași
+    vector_medie = np.mean(mfccs.T, axis=0)
+    vector_variatie = np.std(mfccs.T, axis=0)
+
+    # 6. Unim rezultatele într-un super-vector de 26 de elemente
+    vector_final = np.concatenate((vector_medie, vector_variatie))
+
+    return vector_final.tolist()
+
+def preia_folder_si_defineste_semnaturi(folder_path):
+    """Cerința 2: Preia fisierele audio si le salveaza amprenta in JSON."""
+    print(f"\n[1] Scanez folderul '{folder_path}'...")
+    database = {}
+
+    for fisier in os.listdir(folder_path):
+        if fisier.endswith('.mp3') or fisier.endswith('.wav'):
+            print(f"    Procesez: {fisier}...")
+            cale_completa = os.path.join(folder_path, fisier)
+            database[fisier] = extrage_semnatura(cale_completa)
+
+    with open(JSON_DB_PATH, 'w') as f:
+        json.dump(database, f, indent=4)
+    print("    Gata! Semnaturile au fost salvate.")
+
+def captare_microfon(filename="output.wav", duration=DURATA_TEST):
+    """Cerința 1: Inregistreaza de la microfon folosind PyAudio."""
     CHUNK = 1024
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = 44100
-    RECORD_SECONDS = duration
 
-    with wave.open('output.wav', 'wb') as wf:
+    with wave.open(filename, 'wb') as wf:
         p = pyaudio.PyAudio()
         wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))git status
+        wf.setsampwidth(p.get_sample_size(FORMAT))
         wf.setframerate(RATE)
 
         stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True)
 
-        print('Se inregistreaza...')
-        for _ in range(0, RATE // CHUNK * RECORD_SECONDS):
+        print(f'\n[2] Se inregistreaza {duration} secunde', end='', flush=True)
+        for _ in range(0, int(RATE / CHUNK * duration)):
             wf.writeframes(stream.read(CHUNK))
             print(".", end='', flush=True)
-        print('\nGata')
+        print('\n    Gata\n')
 
         stream.close()
         p.terminate()
 
+def identifica_semnal(fisier_captat):
+    """Cerința 3: Compara inregistrarea cu baza de date."""
+    print("[3] Caut potrivirea în baza de date...")
 
-# Functia pentru a scana folderul si a crea un dictionar cu amprentele melodiilor
-async def generate_fingerprints(folder_path=r"D:\Music"):
-    results = {}
-    shazam = Shazam()
+    with open(JSON_DB_PATH, 'r') as f:
+        database = json.load(f)
 
-    for element in os.listdir(folder_path):
-        # Proceseaza doar fisierele MP3
-        if element.endswith('.mp3'):
-            file_path = os.path.join(folder_path, element)
-            print(f"Fisier: {element}")
+    vector_captat = extrage_semnatura(fisier_captat)
 
-            # Obtine informatii despre melodie de la Shazam API
-            response = await shazam.recognize(file_path)
+    cea_mai_buna_potrivire = None
+    distanta_minima = 999
 
-            if 'track' in response:
-                title = response['track']['title']
-                artist = response['track']['subtitle']
-                results[element] = f'{artist} - {title}'
-                print(f" Gasit: {artist} - {title}\n")
-            else:
-                print(f" Nu s-a putut genera amprenta\n")
+    print("\n--- SCORURI CALCULATE ---")
+    for nume_fisier, vector_baza in database.items():
+        distanta = cosine(vector_captat, vector_baza)
+        print(f" -> {nume_fisier}: {distanta:.4f}")
 
-    # Afiseaza baza de date finala cu melodiile locale
-    print("Baza de date cu melodii:")
-    for file, song in results.items():
-        print(f"  {file} -> {song}")
-    return results
+        if distanta < distanta_minima:
+            distanta_minima = distanta
+            cea_mai_buna_potrivire = nume_fisier
 
-
-# Functia pentru a identifica fisierul inregistrat si a-l compara cu baza de date
-async def identify_audio(database):
-    shazam = Shazam()
-
-    # Recunoaste sunetul capturat de la microfon
-    response_mic = await shazam.recognize("output.wav")
-
-    if 'track' in response_mic:
-        title = response_mic['track']['title']
-        artist = response_mic['track']['subtitle']
-        mic_fingerprint = f'{artist} - {title}'
-
-        print(f"Detectie microfon: {mic_fingerprint}")
-
-        # Verifica daca melodia exista in dictionarul creat la Pasul 1
-        if mic_fingerprint in database.values():
-            print("Melodia a fost gasita in folder")
-        else:
-            print("Melodia a fost recunoscuta, dar nu este in folder")
+    print("-" * 50)
+    # Prag de siguranță setat la 0.20
+    if distanta_minima < 0.20:
+        print(f" REZULTAT: Melodia este {cea_mai_buna_potrivire}")
     else:
-        print("Melodia nu a putut fi recunoscuta")
+        print(f" REZULTAT: Nu exista o potrivire exacta.")
+        print(f" Cel mai mult seamana cu: {cea_mai_buna_potrivire}")
+    print(f" (Distanta calculata: {distanta_minima:.4f})")
+    print("-" * 50)
 
-
-# Fluxul de executie
+# --- Fluxul programului ---
 if __name__ == "__main__":
-    print("SISTEM DE RECUNOASTERE AUDIO")
+    print("=== RECUNOASTERE AUDIO ===")
 
-    # Pasul 1: Scaneaza fisierele locale si construieste baza de date cu amprente
-    print("PASUL 1: Se scaneaza folderul de muzica...\n")
-    song_database = asyncio.run(generate_fingerprints())
+    if not os.path.exists(JSON_DB_PATH):
+        preia_folder_si_defineste_semnaturi(FOLDER_MUZICA)
+    else:
+        print("[INFO] Baza de date a fost deja incarcata.")
 
-    # Pasul 2: Inregistreaza un nou sample audio de la microfon
-    print("\nPASUL 2: Se inregistreaza de la microfon...")
-    input("Apasa ENTER pentru a incepe inregistrarea...")
-    record_microphone()
-
-    # Pasul 3: Identifica sample-ul si cauta in baza de date locala
-    print("\n\nPASUL 3: Se identifica melodia...\n")
-    asyncio.run(identify_audio(song_database))
+    input(f"\nApasa ENTER pentru a inregistra {DURATA_TEST} secunde...")
+    captare_microfon("output.wav", DURATA_TEST)
+    identifica_semnal("output.wav")
