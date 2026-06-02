@@ -110,7 +110,7 @@ def identifica_semnal(fisier_captat):
             cea_mai_buna_potrivire = nume
 
     print("-----------------------------------------")
-    if distanta_minima < 0.10:
+    if distanta_minima < 0.05:
         print(f"Rezultat: {cea_mai_buna_potrivire} (scor: {distanta_minima:.4f})")
     else:
         print(f"N-am gasit exact. Cel mai aproape: {cea_mai_buna_potrivire} (scor: {distanta_minima:.4f})")
