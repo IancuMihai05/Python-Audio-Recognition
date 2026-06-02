@@ -21,14 +21,6 @@ Rezumatul prompturilor tehnice folosite pentru generarea codului:
 """
 
 import os
-import json
-import wave
-import pyaudio
-import numpy as np
-import librosa
-from scipy.spatial.distance import cosine
-
-import os
 import sys
 import json
 import wave
